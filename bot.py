@@ -8,7 +8,7 @@ from telegram.ext import (
     ContextTypes, MessageHandler, filters, ConversationHandler
 )
 
-# Load environment variables
+# Загрузка переменных окружения
 load_dotenv()
 
 logging.basicConfig(
@@ -26,6 +26,7 @@ MAX_OVERVIEW_LENGTH = int(os.getenv('MAX_OVERVIEW_LENGTH', '400'))
 
 def require_data(func):
     async def wrapper(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # Проверка, загружена ли база фильмов
         if self.movies_df is None or self.movies_df.empty:
             text = "⚠️ База фильмов не загружена. Попробуйте позже."
             if update.message:
@@ -44,6 +45,7 @@ class MovieRecommendationBot:
         self.load_movies()
 
     def load_movies(self):
+        # Загрузка и проверка файла с фильмами
         try:
             if not os.path.isfile(MOVIES_DB_PATH):
                 raise FileNotFoundError(f"Файл {MOVIES_DB_PATH} не найден.")
@@ -63,6 +65,7 @@ class MovieRecommendationBot:
             raise
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # Отображение главного меню с кнопками выбора критерия
         keyboard = [
             [InlineKeyboardButton("🎬 Случайный фильм", callback_data='random')],
             [InlineKeyboardButton("⭐ По рейтингу", callback_data='rating')],
@@ -86,6 +89,7 @@ class MovieRecommendationBot:
             )
 
     async def about(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # Информация о боте и базе фильмов
         query = update.callback_query
         await query.answer()
         text = (
@@ -99,12 +103,14 @@ class MovieRecommendationBot:
 
     @require_data
     async def random_movie(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # Рекомендация случайного фильма из базы
         query = update.callback_query
         await query.answer()
         movie = self.movies_df.sample(1).iloc[0]
         await self._send_movie_info(query, movie, "🎲 Случайная рекомендация:")
 
     async def choose_rating(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        # Запрос минимального рейтинга у пользователя
         query = update.callback_query
         await query.answer()
         min_rating = round(self.movies_df['vote_average'].min(), 1)
@@ -116,6 +122,7 @@ class MovieRecommendationBot:
         return RATING
 
     async def process_rating(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        # Обработка введённого рейтинга, вывод подходящего фильма
         try:
             rating = float(update.message.text)
         except ValueError:
@@ -138,12 +145,14 @@ class MovieRecommendationBot:
         return ConversationHandler.END
 
     async def choose_year(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        # Запрос года выпуска от пользователя
         query = update.callback_query
         await query.answer()
         await query.edit_message_text("Введите год выпуска (например, 2020):")
         return YEAR
 
     async def process_year(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        # Обработка ввода года и вывод фильма указанного года
         try:
             year = int(update.message.text)
         except ValueError:
@@ -160,12 +169,14 @@ class MovieRecommendationBot:
         return ConversationHandler.END
 
     async def choose_popularity(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        # Запрос минимальной популярности у пользователя
         query = update.callback_query
         await query.answer()
         await query.edit_message_text("Введите минимальный уровень популярности:")
         return POPULARITY
 
     async def process_popularity(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        # Обработка популярности и вывод фильмов
         try:
             popularity = float(update.message.text)
         except ValueError:
@@ -182,6 +193,7 @@ class MovieRecommendationBot:
         return ConversationHandler.END
 
     async def _send_movie_info(self, update_obj, movie, prefix=""):
+        # Формирует и отправляет информацию о фильме
         text = (
             f"{prefix}\n\n"
             f"<b>{movie['title']}</b> ({int(movie['year'])})\n"
@@ -209,16 +221,19 @@ class MovieRecommendationBot:
             await update_obj.edit_message_text(text, reply_markup=markup, parse_mode='HTML', disable_web_page_preview=False)
 
     async def cancel(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+        # Отмена текущего действия
         await update.message.reply_text("Действие отменено. Используйте /start для нового поиска.")
         return ConversationHandler.END
 
     async def error_handler(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        # Логирование ошибок и уведомление пользователя
         logger.error(f"Ошибка: {context.error}", exc_info=context.error)
         if update and hasattr(update, 'effective_message') and update.effective_message:
             await update.effective_message.reply_text("⚠️ Произошла ошибка. Пожалуйста, попробуйте позже.")
 
 
 def main():
+    # Основной запуск бота
     if not BOT_TOKEN:
         logger.critical("Токен бота не найден! Проверьте .env файл.")
         return
